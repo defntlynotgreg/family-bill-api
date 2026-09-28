@@ -8,7 +8,7 @@ app = FastAPI(title="Family Bill Tracker API")
 # Allow your future React frontend to communicate with this backend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://family-bill-ui-your-exact-link.vercel.app"], 
+    allow_origins=["https://family-bill-ui.vercel.app"], 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
