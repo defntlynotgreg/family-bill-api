@@ -24,11 +24,20 @@ def read_root():
 @app.post("/bills/delete")
 async def delete_bill(data: dict):
     try:
-        month = data.get("month")
-        year = data.get("year")
+        # Force month to a clean string and year to an integer
+        month = str(data.get("month", "")).strip()
+        year = int(data.get("year"))
         
-        # Find the specific bill in the database
-        docs = db.collection("bills").where("month", "==", month).where("year", "==", year).stream()
+        # 1. Search for the exact integer match
+        docs = list(db.collection("bills").where("month", "==", month).where("year", "==", year).stream())
+        
+        # 2. Fallback: If not found, search for a string match
+        if not docs:
+            docs = list(db.collection("bills").where("month", "==", month).where("year", "==", str(year)).stream())
+
+        if not docs:
+            return {"status": "Error", "message": "Bill not found in database."}
+
         for doc in docs:
             db.collection("bills").document(doc.id).delete()
             
@@ -36,18 +45,17 @@ async def delete_bill(data: dict):
     except Exception as e:
         return {"status": "Error", "message": str(e)}
 
+
 @app.post("/bills/edit")
 async def edit_bill(data: dict):
     try:
-        month = data.get("month")
-        year = data.get("year")
+        month = str(data.get("month", "")).strip()
+        year = int(data.get("year"))
         
-        # Safely fall back to 0.0 if the data is missing to prevent math crashes
         rent = float(data.get("rent_and_water") or 0.0)
         elec = float(data.get("electricity") or 0.0)
         internet = float(data.get("internet") or 0.0)
         
-        # Recalculate the math
         total = round(rent + elec + internet, 2)
         per_head = round(total / 3, 2)
         
@@ -57,20 +65,23 @@ async def edit_bill(data: dict):
             "Converge (Internet)": internet
         }
         
-        # Overwrite the existing document
-        docs = db.collection("bills").where("month", "==", month).where("year", "==", year).stream()
-        updated = False
+        # 1. Search for the exact integer match
+        docs = list(db.collection("bills").where("month", "==", month).where("year", "==", year).stream())
         
+        # 2. Fallback: If not found, search for a string match
+        if not docs:
+            docs = list(db.collection("bills").where("month", "==", month).where("year", "==", str(year)).stream())
+        
+        if not docs:
+            return {"status": "Error", "message": f"Bill not found for {month} {year}."}
+            
         for doc in docs:
             db.collection("bills").document(doc.id).update({
                 "payables": payables,
                 "totalDue": total,
-                "contributionPerHead": per_head
+                "contributionPerHead": per_head,
+                "year": year # Instantly fixes the type in Firestore to a clean integer
             })
-            updated = True
-            
-        if not updated:
-            return {"status": "Error", "message": "Bill not found in database."}
             
         return {"status": "Success", "message": "Bill updated"}
     except Exception as e:
